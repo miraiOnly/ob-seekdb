@@ -18,6 +18,7 @@
 
 #include "config_bridge.h"
 #include "ob_static_engine_cg.h"
+#include "lib/string/ob_sql_string.h"
 #include "sql/optimizer/ob_log_group_by.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_limit.h"
@@ -5482,6 +5483,28 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     if (OB_SUCC(ret)) {
       spec.into_type_ = op.get_into_type();
       spec.is_optional_ = op.get_is_optional();
+      spec.is_header_ = op.get_is_header();
+      if (spec.is_header_) {
+        // build "col1,col2,...,colN" from the select items' names
+        ObSqlString header_line;
+        const ObSelectStmt *select_stmt =
+            static_cast<const ObSelectStmt *>(op.get_stmt());
+        for (int64_t i = 0; OB_SUCC(ret) && i < op.get_select_exprs().count(); ++i) {
+          ObString name;
+          if (OB_NOT_NULL(select_stmt) && i < select_stmt->get_select_item_size()) {
+            const SelectItem &item = select_stmt->get_select_item(i);
+            name = item.expr_name_.empty() ? item.alias_name_ : item.expr_name_;
+          }
+          if (name.empty()) {
+            name = ObString::make_string("col");
+          }
+          if (i > 0 && OB_FAIL(header_line.append(","))) {
+          } else if (OB_FAIL(header_line.append(name))) {
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(ob_write_string(alloc, header_line.string(), spec.header_str_))) {
+        }
+      }
       spec.is_single_ = op.get_is_single();
       spec.max_file_size_ = op.get_max_file_size();
       spec.buffer_size_ = op.get_buffer_size();

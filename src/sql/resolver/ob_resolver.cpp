@@ -238,6 +238,15 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_SELECT_STMT_RESOLVER(Select);
         break;
       }
+      case T_COPY_STMT: {
+        HEAP_VAR(ObSelectResolver, copy_resolver, params_) {
+          copy_resolver.set_calc_found_rows(true);
+          copy_resolver.set_has_top_limit(true);
+          if (OB_FAIL(SMART_CALL(copy_resolver.resolve_copy_stmt(parse_tree, stmt)))) {
+          }
+        }
+        break;
+      }
       case T_INSERT: {
         REGISTER_STMT_RESOLVER(Insert);
         break;

@@ -6864,6 +6864,7 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
       select_into->set_is_optional(into_item->is_optional_);
       select_into->set_closed_cht(into_item->closed_cht_);
       select_into->set_is_single(into_item->is_single_);
+      select_into->set_is_header(into_item->is_header_);
       select_into->set_max_file_size(into_item->max_file_size_);
       select_into->set_buffer_size(into_item->buffer_size_);
       select_into->set_escaped_cht(into_item->escaped_cht_);

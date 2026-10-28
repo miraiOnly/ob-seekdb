@@ -63,6 +63,7 @@ public:
       line_str_(),
       closed_cht_(),
       is_optional_(false),
+      is_header_(false),
       select_exprs_(alloc),
       is_single_(true),
       max_file_size_(DEFAULT_MAX_FILE_SIZE),
@@ -82,6 +83,8 @@ public:
   common::ObObj line_str_;
   common::ObObj closed_cht_;
   bool is_optional_;
+  bool is_header_;
+  common::ObString header_str_; // pre-built "col1,col2,...,colN" header line
   common::ObFixedArray<ObExpr*, common::ObIAllocator> select_exprs_;
   bool is_single_;
   int64_t max_file_size_;

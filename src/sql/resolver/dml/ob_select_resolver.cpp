@@ -997,6 +997,87 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   return ret;
 }
 
+
+int ObSelectResolver::resolve_copy_stmt(const ParseNode &parse_tree, ObStmt *&stmt)
+{
+  int ret = OB_SUCCESS;
+  stmt = NULL;
+  ObSelectStmt *select_stmt = NULL;
+  ObSelectIntoItem *into_item = NULL;
+  if (OB_UNLIKELY(T_COPY_STMT != parse_tree.type_) || OB_ISNULL(parse_tree.children_[0])
+      || OB_ISNULL(parse_tree.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid copy stmt node", K(ret));
+  } else if (OB_FAIL(resolve(*parse_tree.children_[0]))) {
+    LOG_WARN("fail to resolve copy inner select", K(ret));
+  } else if (OB_ISNULL(stmt = get_basic_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(into_item = static_cast<ObSelectIntoItem *>(
+                       allocator_->alloc(sizeof(ObSelectIntoItem))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    new (into_item) ObSelectIntoItem();
+    into_item->into_type_ = T_INTO_OUTFILE;
+    const ParseNode *path_node = parse_tree.children_[1];
+    ObString path;
+    if (OB_NOT_NULL(path_node->str_value_)) {
+      path.assign_ptr(path_node->str_value_, path_node->str_len_);
+    } else {
+      ret = OB_ERR_PARSE_SQL;
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      ObString secure_file_priv;
+      if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
+        LOG_WARN("fail to get secure_file_priv", K(ret));
+      } else if (!session_info_->is_inner()
+                 && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, path))) {
+        LOG_WARN("copy target not allowed by secure_file_priv", K(ret), K(path));
+      } else {
+        // DuckDB COPY overwrites an existing target file
+        char unlink_buf[common::MAX_PATH_SIZE] = {0};
+        if (path.length() + 1 <= common::MAX_PATH_SIZE) {
+          MEMCPY(unlink_buf, path.ptr(), path.length());
+          unlink_buf[path.length()] = '\0';
+          ::unlink(unlink_buf);
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(parse_tree.children_[2])) {
+      const ParseNode *opts = parse_tree.children_[2];
+      const int64_t opt_count = T_COPY_OPTIONS == opts->type_ ? opts->num_child_ : 1;
+      for (int64_t i = 0; OB_SUCC(ret) && i < opt_count; ++i) {
+        const ParseNode *opt = T_COPY_OPTIONS == opts->type_ ? opts->children_[i] : opts;
+        if (OB_NOT_NULL(opt) && T_COPY_OPTION == opt->type_ && OB_NOT_NULL(opt->children_[0])
+            && OB_NOT_NULL(opt->children_[0]->str_value_)) {
+          ObString name(opt->children_[0]->str_len_, opt->children_[0]->str_value_);
+          if (0 == name.case_compare("header")) {
+            into_item->is_header_ = true;
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      into_item->outfile_name_.set_varchar(path);
+      into_item->outfile_name_.set_collation_type(ObCharset::get_system_collation());
+      ObObj field_str;
+      field_str.set_varchar(ObString::make_string(","));
+      field_str.set_collation_type(ObCharset::get_system_collation());
+      into_item->field_str_ = field_str;
+      ObObj line_str;
+      line_str.set_varchar(ObString::make_string("\n"));
+      line_str.set_collation_type(ObCharset::get_system_collation());
+      into_item->line_str_ = line_str;
+      select_stmt->set_select_into(into_item);
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;

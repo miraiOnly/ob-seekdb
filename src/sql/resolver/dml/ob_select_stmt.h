@@ -125,6 +125,7 @@ struct ObSelectIntoItem
         closed_cht_(),
         is_optional_(DEFAULT_OPTIONAL_ENCLOSED),
         is_single_(DEFAULT_SINGLE_OPT),
+        is_header_(false),
         max_file_size_(DEFAULT_MAX_FILE_SIZE),
         escaped_cht_(),
         buffer_size_(DEFAULT_BUFFER_SIZE),
@@ -150,6 +151,7 @@ struct ObSelectIntoItem
     closed_cht_ = other.closed_cht_;
     is_optional_ = other.is_optional_;
     is_single_ = other.is_single_;
+    is_header_ = other.is_header_;
     max_file_size_ = other.max_file_size_;
     escaped_cht_ = other.escaped_cht_;
     cs_type_ = other.cs_type_;
@@ -181,6 +183,7 @@ struct ObSelectIntoItem
   common::ObObj closed_cht_; // all fields, "123","ab"
   bool is_optional_; //  for string, closed character, such as "aa"
   bool is_single_;
+  bool is_header_; // write the column-name header line first (COPY TO)
   int64_t max_file_size_;
   common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;

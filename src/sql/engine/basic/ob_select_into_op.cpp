@@ -947,6 +947,16 @@ int ObSelectIntoOp::into_outfile(ObExternalFileWriter *data_writer)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObExpr*> &select_exprs = MY_SPEC.select_exprs_;
+  if (MY_SPEC.is_header_ && is_first_) {
+    ObObj header_obj;
+    header_obj.set_varchar(MY_SPEC.header_str_);
+    if (OB_FAIL(write_obj_to_file(header_obj, *static_cast<ObCsvFileWriter *>(data_writer)))) {
+      LOG_WARN("fail to write csv header", K(ret));
+    } else if (OB_FAIL(write_obj_to_file(line_str_, *static_cast<ObCsvFileWriter *>(data_writer)))) {
+      LOG_WARN("fail to write csv header terminator", K(ret));
+    }
+    is_first_ = false;
+  }
   ObDatum *datum = NULL;
   ObObj obj;
   ObCsvFileWriter *csv_data_writer = NULL;
@@ -988,6 +998,16 @@ int ObSelectIntoOp::into_outfile_batch_csv(const ObBatchRows &brs, ObExternalFil
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObExpr*> &select_exprs = MY_SPEC.select_exprs_;
+  if (MY_SPEC.is_header_ && is_first_) {
+    ObObj header_obj;
+    header_obj.set_varchar(MY_SPEC.header_str_);
+    if (OB_FAIL(write_obj_to_file(header_obj, *static_cast<ObCsvFileWriter *>(data_writer)))) {
+      LOG_WARN("fail to write csv header", K(ret));
+    } else if (OB_FAIL(write_obj_to_file(line_str_, *static_cast<ObCsvFileWriter *>(data_writer)))) {
+      LOG_WARN("fail to write csv header terminator", K(ret));
+    }
+    is_first_ = false;
+  }
   ObArray<ObDatumVector> datum_vectors;
   ObDatum *datum = NULL;
   ObObj obj;

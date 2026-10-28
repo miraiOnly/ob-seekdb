@@ -39,6 +39,7 @@ public:
         closed_cht_(),
         is_optional_(true),
         is_single_(true),
+        is_header_(false),
         max_file_size_(DEFAULT_MAX_FILE_SIZE),
         buffer_size_(DEFAULT_BUFFER_SIZE),
         escaped_cht_(),
@@ -79,6 +80,10 @@ public:
   inline void set_is_single(bool is_single)
   {
     is_single_ = is_single;
+  }
+  inline void set_is_header(bool is_header)
+  {
+    is_header_ = is_header;
   }
   inline void set_max_file_size(int64_t max_file_size)
   {
@@ -136,6 +141,10 @@ public:
   {
     return is_single_;
   }
+  inline bool get_is_header() const
+  {
+    return is_header_;
+  }
   inline int64_t get_max_file_size() const
   {
     return max_file_size_;
@@ -182,6 +191,7 @@ private:
   common::ObObj closed_cht_;
   bool is_optional_;
   bool is_single_;
+  bool is_header_;
   int64_t max_file_size_;
   int64_t buffer_size_;
   common::ObObj escaped_cht_;
