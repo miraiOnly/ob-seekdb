@@ -32,6 +32,7 @@ struct ObFileSqlColumnDef
   int32_t length_;
   int16_t precision_;
   int16_t scale_;
+  int16_t nullable_; // saw a NULL during inference
   TO_STRING_KV(K_(name), K_(type), K_(length));
 };
 

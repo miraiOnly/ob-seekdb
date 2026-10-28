@@ -2256,6 +2256,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   ObStmtNeedPrivs stmt_need_privs;
   stmt_need_privs.need_privs_.set_allocator(&allocator);
   if (OB_FAIL(sanity_check(sql_ctx))) {
+    LOG_ERROR("DESCDBG sanity_check failed", K(ret));
   } else if (OB_FAIL(generate_stmt(parse_result,
                                    pc_ctx,
                                    sql_ctx,
@@ -2265,12 +2266,13 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                                    outline_parse_result))) {
   } else if (OB_ISNULL(basic_stmt)) {
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("DESCDBG basic_stmt null", K(ret));
     // begin/commit statement does not need to check privilege
   } else if (!is_begin_commit_stmt
           && OB_FAIL(ObPrivilegeCheck::check_privilege_new(sql_ctx,
                                                            basic_stmt,
                                                            stmt_need_privs))) {
-    LOG_WARN("Failed to check ora privilege info", K(ret), K(*basic_stmt));
+    LOG_ERROR("DESCDBG priv check failed", K(ret));
   } else if (OB_FAIL(ObPrivilegeCheck::check_password_expired(sql_ctx,
                                                               basic_stmt->get_stmt_type()))) {
   } else if ((sql_ctx.is_batch_params_execute()) &&
@@ -2325,7 +2327,9 @@ int ObSql::generate_plan(ParseResult &parse_result,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_ISNULL(result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("DESCDBG factory query ctx null", K(ret));
   } else if (OB_FAIL(fill_result_set(result, &sql_ctx, mode, *basic_stmt))) {
+    LOG_ERROR("DESCDBG fill_result_set failed", K(ret));
   } else if (OB_FAIL(sql_ctx.session_info_->get_sys_variable(
                       share::SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
                       aggregate_setting))) {

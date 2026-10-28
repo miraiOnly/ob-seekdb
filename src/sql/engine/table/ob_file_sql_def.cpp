@@ -609,6 +609,7 @@ int infer_csv_schema(ObFileSqlDef &def, const char *data, int64_t len)
         col.length_ = 0;
         col.precision_ = -1;
         col.scale_ = -1;
+        col.nullable_ = 0;
         if (def.header_) {
           col.name_ = fields.at(i);
         } else {
@@ -632,6 +633,9 @@ int infer_csv_schema(ObFileSqlDef &def, const char *data, int64_t len)
           if (!def.null_str_.empty() && v == def.null_str_) {
             v.reset();
           }
+          if (v.empty() && i < def.columns_.count()) {
+            def.columns_[i].nullable_ = 1;
+          }
           if (OB_FAIL(values[i].push_back(v))) {
           }
         }
@@ -644,6 +648,9 @@ int infer_csv_schema(ObFileSqlDef &def, const char *data, int64_t len)
           if (!def.null_str_.empty() && v == def.null_str_) {
             v.reset();
           }
+        }
+        if (v.empty() && i < def.columns_.count()) {
+          def.columns_[i].nullable_ = 1;
         }
         if (OB_FAIL(values[i].push_back(v))) {
         }
@@ -818,6 +825,13 @@ int infer_json_schema(ObFileSqlDef &def, const char *data, int64_t len)
   for (int64_t c = 0; OB_SUCC(ret) && c < names.count(); ++c) {
     ObFileSqlColumnDef col;
     col.name_ = names[c];
+    col.nullable_ = 0;
+    for (int64_t r = 0; r < values[c].count(); ++r) {
+      if (values[c].at(r).empty()) {
+        col.nullable_ = 1;
+        break;
+      }
+    }
     if (OB_FAIL(merge_column_type(def.allocator_, values[c], col))) {
     } else if (OB_FAIL(def.columns_.push_back(col))) {
     }
@@ -874,6 +888,7 @@ int ObFileSqlInferUtils::infer_schema(ObFileSqlDef &def)
         col.cs_type_ = CS_TYPE_UTF8MB4_BIN;
         col.precision_ = -1;
         col.scale_ = -1;
+        col.nullable_ = 0;
         if (1 == pq_info.physical_type_ || 2 == pq_info.physical_type_) { // INT32/INT64
           col.type_ = ObIntType;
           col.length_ = 20;

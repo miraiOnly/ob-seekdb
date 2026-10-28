@@ -46,6 +46,7 @@ OB_DEF_SERIALIZE_SIZE(ObFileSqlSpec)
       OB_UNIS_ADD_LEN(col.length_);
       OB_UNIS_ADD_LEN(col.precision_);
       OB_UNIS_ADD_LEN(col.scale_);
+      OB_UNIS_ADD_LEN(col.nullable_);
     }
   }
   return len;
@@ -85,6 +86,7 @@ OB_DEF_SERIALIZE(ObFileSqlSpec)
       OB_UNIS_ENCODE(col.length_);
       OB_UNIS_ENCODE(col.precision_);
       OB_UNIS_ENCODE(col.scale_);
+      OB_UNIS_ENCODE(col.nullable_);
     }
   }
   return ret;
@@ -146,7 +148,10 @@ OB_DEF_DESERIALIZE(ObFileSqlSpec)
           OB_UNIS_DECODE(col.length_);
           OB_UNIS_DECODE(prec_v);
           OB_UNIS_DECODE(scale_v);
+          int32_t nullable_v = 0;
+          OB_UNIS_DECODE(nullable_v);
           col.type_ = static_cast<ObObjType>(type_v);
+          col.nullable_ = static_cast<int16_t>(nullable_v);
           col.cs_type_ = static_cast<ObCollationType>(cs_v);
           col.precision_ = static_cast<int16_t>(prec_v);
           col.scale_ = static_cast<int16_t>(scale_v);
