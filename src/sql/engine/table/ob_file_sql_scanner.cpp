@@ -193,8 +193,12 @@ int ObFileSqlScanner::push_field(common::ObSEArray<ObString, 32> &fields,
                                  const ObStringBuffer &field)
 {
   int ret = OB_SUCCESS;
-  ObString str(static_cast<int32_t>(field.length()), field.ptr());
-  if (OB_FAIL(fields.push_back(str))) {
+  // deep-copy: the field buffer is reused for the next field, so the
+  // pushed string must not alias it
+  ObString copied;
+  if (OB_FAIL(ob_write_string(scratch_alloc_, field.string(), copied))) {
+    LOG_WARN("failed to deep copy csv field", K(ret));
+  } else if (OB_FAIL(fields.push_back(copied))) {
     LOG_WARN("failed to push csv field", K(ret));
   }
   return ret;
@@ -269,7 +273,7 @@ int ObFileSqlScanner::read_csv_record(common::ObSEArray<ObString, 32> &fields)
           }
         } else if (OB_FAIL(field.append(&c, 1))) {
         }
-      } else if (c == def_.quote_ && field.length() == 0 && !has_content) {
+      } else if (c == def_.quote_ && field.length() == 0) {
         in_quotes = true;
         has_content = true;
       } else if (c == def_.delim_) {

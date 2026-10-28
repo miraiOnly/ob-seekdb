@@ -3099,6 +3099,7 @@ int ObDMLResolver::resolve_single_table_column_item(const TableItem &table_item,
     if (OB_FAIL(resolve_json_table_column_item(table_item, column_name, col_item))) {
     }
   } else if (table_item.is_file_sql()) {
+    LOG_ERROR("FS_COLDBG single column branch");
     if (OB_FAIL(resolve_file_sql_column_item(table_item, column_name, col_item))) {
     }
   } else if (table_item.is_values_table()) {
@@ -7879,6 +7880,7 @@ int ObDMLResolver::resolve_file_sql_column_all_items(const TableItem &table_item
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
+  LOG_ERROR("FS_STARDBG all_items entry", K(table_item.table_id_));
   CK (OB_NOT_NULL(stmt));
   CK (OB_LIKELY(table_item.is_file_sql()));
   if (OB_SUCC(ret)) {
