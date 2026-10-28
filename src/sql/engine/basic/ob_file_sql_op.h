@@ -23,17 +23,20 @@ public:
   ObFileSqlSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type),
         column_exprs_(alloc),
+        column_idx_(alloc),
         file_sql_def_(nullptr),
         file_sql_id_(OB_INVALID_ID),
         deserialize_alloc_(nullptr)
   {}
   virtual ~ObFileSqlSpec() {}
-  virtual void set_deserialize_allocator(common::ObIAllocator *allocator) override
+  virtual void set_deserialize_allocator(common::ObIAllocator *allocator)
   {
     deserialize_alloc_ = allocator;
   }
-  // column outputs, one per def column, in def.columns_ order
+  // dense output columns; column_idx_[i] is the def column index that
+  // column_exprs_[i] reads from
   common::ObFixedArray<ObExpr*, common::ObIAllocator> column_exprs_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> column_idx_;
   ObFileSqlDef *file_sql_def_;
   int64_t file_sql_id_;  // table item id of the file sql table
 private:

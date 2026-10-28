@@ -3826,7 +3826,7 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
       format = ObFileSqlFormat::GLOB;
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "unknown file sql table function");
+      LOG_WARN("unknown file sql table function");
     }
   }
 
@@ -3836,7 +3836,7 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
     LOG_WARN("fail to get enable_file_sql", K(ret));
   } else if (!enable_file_sql) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "enable_file_sql is disabled");
+    LOG_WARN("file sql disabled by enable_file_sql");
   }
 
   // Parse arguments: named arguments are T_OP_ASSIGN with a single column ref
@@ -3855,13 +3855,23 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
       bool is_named = false;
       if (OB_ISNULL(arg_node)) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (T_OP_ASSIGN == arg_node->type_
+      } else if ((T_OP_ASSIGN == arg_node->type_ || T_OP_EQ == arg_node->type_)
                  && OB_NOT_NULL(arg_node->children_[0])
-                 && T_REF_COLUMN == arg_node->children_[0]->type_
-                 && OB_NOT_NULL(arg_node->children_[0]->str_value_)
+                 && (T_REF_COLUMN == arg_node->children_[0]->type_ || T_COLUMN_REF == arg_node->children_[0]->type_)
                  && OB_NOT_NULL(value_node = arg_node->children_[1])) {
-        is_named = true;
-        param_name.assign_ptr(arg_node->children_[0]->str_value_, arg_node->children_[0]->str_len_);
+        const ParseNode *col_ref = arg_node->children_[0];
+        const ParseNode *name_node = NULL;
+        // T_REF_COLUMN children: [db, table, column]; the column ident is
+        // the last child and carries the name.
+        for (int64_t c = 0; c < col_ref->num_child_; ++c) {
+          if (OB_NOT_NULL(col_ref->children_[c]) && OB_NOT_NULL(col_ref->children_[c]->str_value_)) {
+            name_node = col_ref->children_[c];
+          }
+        }
+        if (OB_NOT_NULL(name_node)) {
+          is_named = true;
+          param_name.assign_ptr(name_node->str_value_, name_node->str_len_);
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (is_named) {
@@ -3881,18 +3891,18 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
           null_str_node = value_node;
         } else {
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "unknown file sql table function argument");
+          LOG_WARN("unknown file sql table function argument");
         }
       } else if (OB_ISNULL(path_node)) {
         path_node = arg_node;
       } else {
-        ret = OB_ERR_PARSER_SYNTAX;
-        LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX);
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("file sql table function: unexpected extra positional argument");
       }
     }
     if (OB_SUCC(ret) && OB_ISNULL(path_node)) {
-      ret = OB_ERR_PARSER_SYNTAX;
-      LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX);
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("file sql table function: missing path argument");
     }
   }
 
@@ -3926,15 +3936,15 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
         LOG_WARN("fail to calc file sql const argument", K(tmp_ret));
       } else if (!got_data) {
         tmp_ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "file sql table function argument must be constant");
+        LOG_WARN("file sql table function argument must be constant");
       }
       return tmp_ret;
     };
 
     if (OB_FAIL(eval_const_arg(path_node, path_obj))) {
     } else if (!path_obj.is_string_type()) {
-      ret = OB_ERR_PARSER_SYNTAX;
-      LOG_USER_ERROR(OB_ERR_PARSER_SYNTAX);
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("file sql table function: path must be a string");
     } else if (OB_NOT_NULL(header_node)) {
       ObObj header_obj;
       if (OB_FAIL(eval_const_arg(header_node, header_obj))) {
@@ -3948,7 +3958,7 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
         sample_size = sample_size_obj.get_int();
         if (-1 != sample_size) {
           ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "sample_size other than -1 is not supported");
+          LOG_WARN("file sql sample_size other than -1 is not supported");
         }
       }
     } else if (OB_NOT_NULL(format_node)) {
@@ -4044,19 +4054,28 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
         // realpath(); check the literal pattern against secure_file_priv
         if (!session_info_->is_inner()
             && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, file_def->path_))) {
-          LOG_WARN("file path not allowed by secure_file_priv", K(ret), K(file_def->path_));
+          LOG_WARN("file path not allowed by secure_file_priv", K(ret), K(ret));
         }
       } else if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(common::MAX_PATH_SIZE)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-#ifdef _WIN32
-      } else if (OB_ISNULL(actual_path = ::_fullpath(full_path_buf, file_def->path_.ptr(), common::MAX_PATH_SIZE))) {
-#else
-      } else if (OB_ISNULL(actual_path = ::realpath(file_def->path_.ptr(), full_path_buf))) {
-#endif
+      } else if (file_def->path_.length() + 1 > common::MAX_PATH_SIZE) {
         ret = OB_FILE_NOT_EXIST;
+      } else {
+        MEMCPY(full_path_buf, file_def->path_.ptr(), file_def->path_.length());
+        full_path_buf[file_def->path_.length()] = '\0';
+#ifdef _WIN32
+        actual_path = ::_fullpath(full_path_buf, full_path_buf, common::MAX_PATH_SIZE);
+#else
+        actual_path = ::realpath(full_path_buf, full_path_buf);
+#endif
+        if (OB_ISNULL(actual_path)) {
+          ret = OB_FILE_NOT_EXIST;
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (!session_info_->is_inner()
                  && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
-        LOG_WARN("file path not allowed by secure_file_priv", K(ret), K(file_def->path_));
+        LOG_WARN("file path not allowed by secure_file_priv", K(ret));
       }
     }
 
@@ -4064,7 +4083,7 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
     if (OB_FAIL(ret)) {
     } else if (ObFileSqlFormat::PARQUET == format) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "read_parquet is not supported yet");
+      LOG_WARN("read_parquet is not supported yet");
     } else if (OB_FAIL(ObFileSqlInferUtils::infer_schema(*file_def))) {
       LOG_WARN("fail to infer file sql schema", K(ret), K(*file_def));
     }

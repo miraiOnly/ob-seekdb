@@ -5651,9 +5651,11 @@ int ObStaticEngineCG::generate_spec(ObLogFileSql &op, ObFileSqlSpec &spec,
   UNUSED(in_root_job);
   ObIAllocator &alloc = phy_plan_->get_allocator();
   int ret = OB_SUCCESS;
+  LOG_ERROR("FS_CGDBG generate_spec entry", K(ret));
   if (OB_ISNULL(op.get_stmt()) || OB_ISNULL(op.get_file_sql_def())) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(spec.column_exprs_.init(op.get_stmt()->get_column_size()))) {
+  } else if (OB_FAIL(spec.column_idx_.init(op.get_file_sql_def()->columns_.count()))) {
+  } else if (OB_FAIL(spec.column_exprs_.init(op.get_file_sql_def()->columns_.count()))) {
   } else if (OB_UNLIKELY(op.get_num_of_child() > 0)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -5687,9 +5689,11 @@ int ObStaticEngineCG::generate_spec(ObLogFileSql &op, ObFileSqlSpec &spec,
         OZ (mark_expr_self_produced(col_item->expr_));
         OZ (generate_rt_expr(*col_item->expr_, rt_expr));
         OZ (spec.column_exprs_.push_back(rt_expr));
+        OZ (spec.column_idx_.push_back(col_item->column_id_));
       }
     }
   }
+  LOG_ERROR("FS_CGDBG generate_spec done", K(ret), K(spec.column_exprs_.count()), K(spec.column_idx_.count()));
   return ret;
 }
 

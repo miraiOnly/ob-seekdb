@@ -64,22 +64,22 @@ int ObFileSqlScanner::open()
   if (ObFileSqlFormat::CSV != def_.format_ && ObFileSqlFormat::JSON != def_.format_) {
     // PARQUET/GLOB scanners are not implemented yet.
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("file sql scanner only supports csv and jsonl files", K(ret),
+    LOG_ERROR("file sql scanner only supports csv and jsonl files", K(ret),
              K(static_cast<int8_t>(def_.format_)));
   } else if (def_.path_.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("file sql path is empty", K(ret));
+    LOG_ERROR("file sql path is empty", K(ret));
   } else if (def_.path_.length() >= MAX_FILE_PATH_LEN) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("file sql path is too long", K(ret), K(def_.path_.length()));
+    LOG_ERROR("file sql path is too long", K(ret), K(def_.path_.length()));
   } else {
     MEMCPY(file_path_, def_.path_.ptr(), def_.path_.length());
     file_path_[def_.path_.length()] = '\0';
     fp_ = ::fopen(file_path_, "rb");
     if (OB_ISNULL(fp_)) {
       ret = OB_FILE_NOT_EXIST;
-      LOG_WARN("failed to open file sql source file", K(ret), K(file_path_));
-    } else if (OB_ISNULL(buf_ = static_cast<char*>(ob_malloc(IO_BUF_SIZE, "FileSqlScannerIO")))) {
+      LOG_ERROR("failed to open file sql source file", K(ret), K(file_path_));
+    } else if (OB_ISNULL(buf_ = static_cast<char*>(ob_malloc(IO_BUF_SIZE, "FileSqlScanIO")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       ::fclose(fp_);
       fp_ = NULL;

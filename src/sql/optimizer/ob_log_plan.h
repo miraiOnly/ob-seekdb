@@ -66,6 +66,7 @@ class Path;
 class JoinPath;
 class SubQueryPath;
 class FunctionTablePath;
+class FileSqlPath;
 class JsonTablePath;
 class TempTablePath;
 class CteTablePath;

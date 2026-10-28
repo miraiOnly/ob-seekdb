@@ -2,6 +2,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/basic/ob_file_sql_op.h"
+#include "lib/utility/ob_serialization_helper.h"
+#include "lib/utility/serialization.h"
 
 using namespace oceanbase::common;
 
@@ -14,6 +16,8 @@ OB_DEF_SERIALIZE_SIZE(ObFileSqlSpec)
 {
   int64_t len = 0;
   BASE_ADD_LEN((ObFileSqlSpec, ObOpSpec));
+  OB_UNIS_ADD_LEN(column_exprs_);
+  OB_UNIS_ADD_LEN(column_idx_);
   OB_UNIS_ADD_LEN(column_exprs_);
   OB_UNIS_ADD_LEN(file_sql_id_);
   const bool has_def = (NULL != file_sql_def_);
@@ -52,6 +56,8 @@ OB_DEF_SERIALIZE(ObFileSqlSpec)
   int ret = OB_SUCCESS;
   BASE_SER((ObFileSqlSpec, ObOpSpec));
   OB_UNIS_ENCODE(column_exprs_);
+  OB_UNIS_ENCODE(column_idx_);
+  OB_UNIS_ENCODE(column_exprs_);
   OB_UNIS_ENCODE(file_sql_id_);
   const bool has_def = (NULL != file_sql_def_);
   OB_UNIS_ENCODE(has_def);
@@ -89,6 +95,8 @@ OB_DEF_DESERIALIZE(ObFileSqlSpec)
   int ret = OB_SUCCESS;
   BASE_DESER((ObFileSqlSpec, ObOpSpec));
   OB_UNIS_DECODE(column_exprs_);
+  OB_UNIS_DECODE(column_idx_);
+  OB_UNIS_DECODE(column_exprs_);
   OB_UNIS_DECODE(file_sql_id_);
   bool has_def = false;
   OB_UNIS_DECODE(has_def);
@@ -97,23 +105,29 @@ OB_DEF_DESERIALIZE(ObFileSqlSpec)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("file sql spec deserialize allocator is null", K(ret));
     } else {
-      void *buf = deserialize_alloc_->alloc(sizeof(ObFileSqlDef));
-      if (OB_ISNULL(buf)) {
+      void *def_buf = deserialize_alloc_->alloc(sizeof(ObFileSqlDef));
+      if (OB_ISNULL(def_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        ObFileSqlDef *def = new (buf) ObFileSqlDef(*deserialize_alloc_);
+        ObFileSqlDef *def = new (def_buf) ObFileSqlDef(*deserialize_alloc_);
         file_sql_def_ = def;
         OB_UNIS_DECODE(def->path_);
         OB_UNIS_DECODE(def->options_);
         OB_UNIS_DECODE(def->null_str_);
         OB_UNIS_DECODE(def->header_);
         OB_UNIS_DECODE(def->sample_size_);
-        OB_UNIS_DECODE(def->delim_);
-        OB_UNIS_DECODE(def->quote_);
-        OB_UNIS_DECODE(def->escape_);
+        int32_t delim_v = 0;
+        int32_t quote_v = 0;
+        int32_t escape_v = 0;
+        OB_UNIS_DECODE(delim_v);
+        OB_UNIS_DECODE(quote_v);
+        OB_UNIS_DECODE(escape_v);
+        def->delim_ = static_cast<char>(delim_v);
+        def->quote_ = static_cast<char>(quote_v);
+        def->escape_ = static_cast<char>(escape_v);
         OB_UNIS_DECODE(def->file_mtime_);
         OB_UNIS_DECODE(def->file_size_);
-        int8_t format = 0;
+        int32_t format = 0;
         OB_UNIS_DECODE(format);
         def->format_ = static_cast<ObFileSqlFormat>(format);
         int64_t col_cnt = 0;
@@ -122,12 +136,20 @@ OB_DEF_DESERIALIZE(ObFileSqlSpec)
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
           ObFileSqlColumnDef &col = def->columns_.at(i);
+          int32_t type_v = 0;
+          int32_t cs_v = 0;
+          int32_t prec_v = 0;
+          int32_t scale_v = 0;
           OB_UNIS_DECODE(col.name_);
-          OB_UNIS_DECODE(col.type_);
-          OB_UNIS_DECODE(col.cs_type_);
+          OB_UNIS_DECODE(type_v);
+          OB_UNIS_DECODE(cs_v);
           OB_UNIS_DECODE(col.length_);
-          OB_UNIS_DECODE(col.precision_);
-          OB_UNIS_DECODE(col.scale_);
+          OB_UNIS_DECODE(prec_v);
+          OB_UNIS_DECODE(scale_v);
+          col.type_ = static_cast<ObObjType>(type_v);
+          col.cs_type_ = static_cast<ObCollationType>(cs_v);
+          col.precision_ = static_cast<int16_t>(prec_v);
+          col.scale_ = static_cast<int16_t>(scale_v);
         }
       }
     }
@@ -194,21 +216,19 @@ int ObFileSqlOp::inner_open()
   int ret = OB_SUCCESS;
   ObFileSqlScanner *scanner = NULL;
   void *buf = NULL;
+  LOG_ERROR("FS_OPDBG inner_open", K(ret));
   if (OB_ISNULL(MY_SPEC.file_sql_def_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file sql def is null", K(ret));
-  } else if (MY_SPEC.column_exprs_.count() != MY_SPEC.file_sql_def_->columns_.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("file sql column count mismatch", K(ret),
-             K(MY_SPEC.column_exprs_.count()), K(MY_SPEC.file_sql_def_->columns_.count()));
+    LOG_ERROR("file sql def is null", K(ret));
   } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObFileSqlScanner)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_ISNULL(scanner = new (buf) ObFileSqlScanner(*MY_SPEC.file_sql_def_))) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(scanner->open())) {
-    LOG_WARN("failed to open file sql scanner", K(ret), K(MY_SPEC.file_sql_def_->path_));
+    LOG_ERROR("FS_OPDBG scanner open failed", K(ret));
   } else {
     scanner_ = scanner;
+    LOG_ERROR("FS_OPDBG scanner open ok", K(MY_SPEC.column_exprs_.count()), K(MY_SPEC.file_sql_def_->columns_.count()));
     col_count_ = MY_SPEC.column_exprs_.count();
     cur_rows_ = NULL;
     cur_row_count_ = 0;
@@ -274,11 +294,16 @@ int ObFileSqlOp::output_row(const ObNewRow &row)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
     ObExpr *expr = MY_SPEC.column_exprs_.at(i);
-    ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
-    if (OB_FAIL(file_sql_obj_to_datum(row.get_cell(i), datum))) {
-      LOG_WARN("failed to fill file sql output datum", K(ret), K(i));
-    } else {
-      expr->get_eval_info(eval_ctx_).evaluated_ = true;
+    const int64_t cell_idx = i < MY_SPEC.column_idx_.count() ? MY_SPEC.column_idx_.at(i) : i;
+    if (OB_ISNULL(expr)) {
+      // column not referenced by the query: nothing to write
+    } else if (cell_idx >= 0 && cell_idx < row.get_count()) {
+      ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
+      if (OB_FAIL(file_sql_obj_to_datum(row.get_cell(cell_idx), datum))) {
+        LOG_WARN("failed to fill file sql output datum", K(ret), K(i));
+      } else {
+        expr->get_eval_info(eval_ctx_).evaluated_ = true;
+      }
     }
   }
   return ret;

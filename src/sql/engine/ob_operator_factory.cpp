@@ -121,6 +121,7 @@
 #include "sql/engine/basic/ob_function_table_op.h"
 #include "sql/engine/basic/ob_json_table_op.h"
 #include "sql/engine/basic/ob_file_sql_op.h"
+#include "sql/optimizer/ob_log_file_sql.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"

@@ -409,8 +409,17 @@ int read_whole_file(ObFileSqlDef &def, char *&buf, int64_t &len)
   MEMSET(&st, 0, sizeof(st));
   if (OB_UNLIKELY(def.path_.empty() || OB_ISNULL(def.path_.ptr()))) {
     ret = OB_FILE_NOT_EXIST;
-  } else if ((fd = ::open(def.path_.ptr(), O_RDONLY)) < 0) {
+  } else if (def.path_.length() + 1 > static_cast<int64_t>(common::MAX_PATH_SIZE)) {
     ret = OB_FILE_NOT_EXIST;
+  } else {
+    char path_buf[common::MAX_PATH_SIZE] = {0};
+    MEMCPY(path_buf, def.path_.ptr(), def.path_.length());
+    path_buf[def.path_.length()] = '\0';
+    if ((fd = ::open(path_buf, O_RDONLY)) < 0) {
+      ret = OB_FILE_NOT_EXIST;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (0 != ::fstat(fd, &st)) {
     ret = OB_FILE_NOT_EXIST;
   } else if (OB_UNLIKELY(st.st_size < 0)) {
