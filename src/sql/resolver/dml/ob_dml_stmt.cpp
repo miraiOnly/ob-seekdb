@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_dml_stmt.h"
+#include "sql/engine/table/ob_file_sql_def.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
 using namespace oceanbase::sql;
@@ -188,6 +189,16 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   SampleInfo *buf = NULL;
   if (is_json_table() 
       && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
+  } else if (is_file_sql() && OB_NOT_NULL(other.file_sql_def_)) {
+    void *buf = allocator->alloc(sizeof(ObFileSqlDef));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      file_sql_def_ = new (buf) ObFileSqlDef(*allocator);
+      if (OB_FAIL(static_cast<ObFileSqlDef *>(file_sql_def_)->assign(
+              *static_cast<ObFileSqlDef *>(other.file_sql_def_)))) {
+      }
+    }
   } else if (OB_FAIL(expr_copier.copy(other.snapshot_query_expr_, snapshot_query_expr_))) {
   } else if (OB_FAIL(expr_copier.copy(other.function_table_expr_, function_table_expr_))) {
   } else if (OB_FAIL(part_ids_.assign(other.part_ids_))) {

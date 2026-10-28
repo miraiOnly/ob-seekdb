@@ -582,6 +582,9 @@ public:
   int allocate_json_table_path(JsonTablePath *json_table_path,
                                    ObLogicalOperator *&out_access_path_op);
 
+  int allocate_file_sql_path(FileSqlPath *file_sql_path,
+                             ObLogicalOperator *&out_access_path_op);
+
   //store index column ids including storing column.
   int store_index_column_ids(ObSqlSchemaGuard &schema_guard,
                              ObLogTableScan &scan,

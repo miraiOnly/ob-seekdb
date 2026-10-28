@@ -33,6 +33,7 @@
 #include "sql/optimizer/ob_log_expr_values.h"
 #include "sql/optimizer/ob_log_function_table.h"
 #include "sql/optimizer/ob_log_json_table.h"
+#include "sql/optimizer/ob_log_file_sql.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_values.h"
@@ -2285,6 +2286,40 @@ int ObLogPlan::allocate_json_table_path(JsonTablePath *json_table_path,
   return ret;
 }
 
+int ObLogPlan::allocate_file_sql_path(FileSqlPath *file_sql_path,
+                                      ObLogicalOperator *&out_access_path_op)
+{
+  int ret = OB_SUCCESS;
+  ObLogFileSql *op = NULL;
+  TableItem *table_item = NULL;
+  if (OB_ISNULL(file_sql_path) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(file_sql_path->table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(op = static_cast<ObLogFileSql*>(get_log_op_factory().
+                                        allocate(*this, LOG_FILE_SQL)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    op->set_table_id(file_sql_path->table_id_);
+    op->set_table_name(table_item->get_table_name());
+    // NOTE(compile-dependency): TableItem::file_sql_def_ is added by the
+    // resolver patch in ob_dml_stmt.h (main agent).
+    if (OB_ISNULL(table_item->file_sql_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      // TableItem stores the def as void*; restore the concrete type.
+      op->set_file_sql_def(static_cast<ObFileSqlDef *>(table_item->file_sql_def_));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(op->get_filter_exprs(), file_sql_path->filter_))) {
+    } else if (OB_FAIL(op->compute_property(file_sql_path))) {
+    } else if (OB_FAIL(op->pick_out_startup_filters())) {
+    } else {
+      out_access_path_op = op;
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::allocate_temp_table_path(TempTablePath *temp_table_path,
                                         ObLogicalOperator *&out_access_path_op)
 {
@@ -3502,6 +3537,10 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
     } else if (path->is_json_table_path()) {
       JsonTablePath *json_table_path = static_cast<JsonTablePath *>(path);
       if (OB_FAIL(allocate_json_table_path(json_table_path, op))) {
+      } else { /* Do nothing */ }
+    } else if (path->is_file_sql_path()) {
+      FileSqlPath *file_sql_path = static_cast<FileSqlPath *>(path);
+      if (OB_FAIL(allocate_file_sql_path(file_sql_path, op))) {
       } else { /* Do nothing */ }
     } else if (path->is_temp_table_path()) {
       TempTablePath *temp_table_path = static_cast<TempTablePath *>(path);

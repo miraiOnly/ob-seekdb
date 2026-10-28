@@ -5,7 +5,10 @@
 
 #include "lib/allocator/ob_allocator.h"
 #include "lib/string/ob_string.h"
+#include "lib/container/ob_se_array.h"
 #include "common/object/ob_object.h"
+#include "common/datum/ob_datum.h"
+#include "common/row/ob_row.h"
 
 namespace oceanbase
 {
@@ -103,6 +106,10 @@ public:
                                 common::ObIArray<ObObjType> &types);
   static int infer_csv_type(common::ObIAllocator &allocator, const ObString &raw, ObObjType &type,
                             int32_t &length);
+  // Read the whole file and infer the output schema (column names + types)
+  // into def.columns_. Full scan (sample_size == -1). PARQUET is not
+  // supported yet and returns OB_NOT_SUPPORTED.
+  static int infer_schema(ObFileSqlDef &def);
   static int csv_to_obj(common::ObIAllocator &allocator, const ObString &raw, ObObjType type,
                         ObObj &obj);
   static int csv_to_datums(common::ObIAllocator &allocator, const ObString &raw, ObObjType type,
