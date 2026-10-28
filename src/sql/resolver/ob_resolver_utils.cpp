@@ -6103,11 +6103,15 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 #endif
         if (full_path.length() < secure_file_priv_tmp.length()) {
           ret = OB_ERR_NO_PRIVILEGE;
+          LOG_ERROR("FS_PRIVDBG short", K(full_path.length()), K(full_path.ptr()),
+                    K(secure_file_priv_tmp.length()));
         } else if (!prefix_ok) {
           ret = OB_ERR_NO_PRIVILEGE;
+          LOG_ERROR("FS_PRIVDBG prefix", K(full_path), K(secure_file_priv_tmp));
         } else if (full_path.length() > secure_file_priv_tmp.length()
                    && !is_fs_root && !boundary_ok) {
           ret = OB_ERR_NO_PRIVILEGE;
+          LOG_ERROR("FS_PRIVDBG boundary", K(full_path), K(secure_file_priv_tmp), K(pos));
         }
       }
     }

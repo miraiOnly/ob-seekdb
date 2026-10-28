@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include "sql/engine/table/ob_file_sql_def.h"
+#include <glob.h>
 #include "lib/string/ob_string_buffer.h"
 
 namespace oceanbase
@@ -73,6 +74,9 @@ private:
   const ObFileSqlDef &def_;
   FILE *fp_;
   char file_path_[MAX_FILE_PATH_LEN];
+  glob_t glob_buf_;
+  int64_t glob_idx_;
+  bool glob_inited_;
   char *buf_;
   int64_t buf_len_;
   int64_t buf_pos_;

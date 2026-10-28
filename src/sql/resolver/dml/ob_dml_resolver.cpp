@@ -4040,6 +4040,7 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
       if (OB_FAIL(ob_write_string(*allocator_, path_obj.get_string(), file_def->path_))) {
       } else if (OB_FAIL(ob_write_string(*allocator_, null_str, file_def->null_str_))) {
       }
+      LOG_ERROR("FS_PATHDGB def built", K(file_def->path_), K(static_cast<int8_t>(format)));
     }
 
     // secure_file_priv check against the resolved absolute path.
@@ -4053,8 +4054,10 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
       } else if (ObFileSqlFormat::GLOB == format) {
         // a glob pattern is not a real file, so there is nothing to
         // realpath(); check the literal pattern against secure_file_priv
+        LOG_ERROR("FS_GLOBDBG before check", K(file_def->path_), K(secure_file_priv));
+        ObString glob_path_for_check = file_def->path_;
         if (!session_info_->is_inner()
-            && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, file_def->path_))) {
+            && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, glob_path_for_check))) {
           LOG_WARN("file path not allowed by secure_file_priv", K(ret), K(ret));
         }
       } else if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(common::MAX_PATH_SIZE)))) {
@@ -4074,7 +4077,8 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (!session_info_->is_inner()
+      } else if (ObFileSqlFormat::GLOB != format
+                 && !session_info_->is_inner()
                  && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
         LOG_WARN("file path not allowed by secure_file_priv", K(ret));
       }

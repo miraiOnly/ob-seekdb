@@ -7,6 +7,7 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/ob_errno.h"
 #include <cstring>
+#include <glob.h>
 #include <cstdlib>
 
 namespace oceanbase
@@ -38,6 +39,8 @@ static ObString trim_ws(const char *s, const int32_t len)
 ObFileSqlScanner::ObFileSqlScanner(const ObFileSqlDef &def)
     : def_(def),
       fp_(NULL),
+      glob_idx_(0),
+      glob_inited_(false),
       buf_(NULL),
       buf_len_(0),
       buf_pos_(0),
@@ -61,11 +64,27 @@ int ObFileSqlScanner::open()
 {
   int ret = OB_SUCCESS;
   close();
-  if (ObFileSqlFormat::CSV != def_.format_ && ObFileSqlFormat::JSON != def_.format_) {
-    // PARQUET/GLOB scanners are not implemented yet.
+  if (ObFileSqlFormat::CSV != def_.format_ && ObFileSqlFormat::JSON != def_.format_
+      && ObFileSqlFormat::GLOB != def_.format_) {
+    // PARQUET scanner is not implemented yet.
     ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("file sql scanner only supports csv and jsonl files", K(ret),
+    LOG_ERROR("file sql scanner only supports csv, jsonl and glob files", K(ret),
              K(static_cast<int8_t>(def_.format_)));
+  } else if (ObFileSqlFormat::GLOB == def_.format_) {
+    if (def_.path_.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (def_.path_.length() + 1 > MAX_FILE_PATH_LEN) {
+      ret = OB_NOT_SUPPORTED;
+    } else {
+      MEMCPY(file_path_, def_.path_.ptr(), def_.path_.length());
+      file_path_[def_.path_.length()] = '\0';
+      if (0 != ::glob(file_path_, GLOB_NOSORT, NULL, &glob_buf_)) {
+        // no matches: empty result set, not an error
+        glob_buf_.gl_pathc = 0;
+      }
+      glob_idx_ = 0;
+      glob_inited_ = true;
+    }
   } else if (def_.path_.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("file sql path is empty", K(ret));
@@ -104,6 +123,11 @@ void ObFileSqlScanner::close()
     ::fclose(fp_);
     fp_ = NULL;
   }
+  if (glob_inited_) {
+    ::globfree(&glob_buf_);
+    glob_inited_ = false;
+    glob_idx_ = 0;
+  }
   if (OB_NOT_NULL(buf_)) {
     ob_free(buf_);
     buf_ = NULL;
@@ -122,7 +146,9 @@ void ObFileSqlScanner::close()
 int ObFileSqlScanner::rewind()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(fp_)) {
+  if (ObFileSqlFormat::GLOB == def_.format_) {
+    glob_idx_ = 0;
+  } else if (OB_ISNULL(fp_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("file sql scanner is not opened", K(ret));
   } else {
@@ -623,6 +649,28 @@ int ObFileSqlScanner::get_next_batch(common::ObIAllocator &allocator, int64_t ca
   if (OB_UNLIKELY(capacity <= 0) || OB_UNLIKELY(col_cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid file sql batch params", K(ret), K(capacity), K(col_cnt));
+  } else if (ObFileSqlFormat::GLOB == def_.format_) {
+    ObNewRow *row_arr = static_cast<ObNewRow*>(allocator.alloc(sizeof(ObNewRow) * capacity));
+    ObObj *cells = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * capacity * col_cnt));
+    if (OB_ISNULL(row_arr) || OB_ISNULL(cells)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      while (OB_SUCC(ret) && count < capacity && glob_idx_ < static_cast<int64_t>(glob_buf_.gl_pathc)) {
+        const char *path = glob_buf_.gl_pathv[glob_idx_++];
+        ObObj &cell = cells[count * col_cnt];
+        ObString copied;
+        if (OB_FAIL(ob_write_string(allocator, ObString(static_cast<int32_t>(STRLEN(path)), path), copied))) {
+        } else {
+          cell.set_varchar(copied);
+          cell.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+          new (row_arr + count) ObNewRow(cells + count * col_cnt, col_cnt);
+          ++count;
+        }
+      }
+      if (OB_SUCC(ret) && count > 0) {
+        rows = row_arr;
+      }
+    }
   } else if (OB_ISNULL(fp_) || OB_ISNULL(buf_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("file sql scanner is not opened", K(ret));
