@@ -2,6 +2,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_file_sql_def.h"
+#include "ob_parquet_reader.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/string/ob_string_buffer.h"
 #include "common/timezone/ob_time_convert.h"
@@ -861,7 +862,34 @@ int ObFileSqlInferUtils::infer_schema(ObFileSqlDef &def)
       }
       break;
     }
-    case ObFileSqlFormat::PARQUET:
+    case ObFileSqlFormat::PARQUET: {
+      ObParquetFileInfo pq_info;
+      if (OB_FAIL(read_whole_file(def, data, len))) {
+        LOG_WARN("fail to read parquet file", K(ret), K(def.path_));
+      } else if (OB_FAIL(ob_parse_parquet_footer(data, len, pq_info))) {
+        LOG_WARN("fail to parse parquet footer", K(ret), K(def.path_));
+      } else {
+        ObFileSqlColumnDef col;
+        col.name_ = pq_info.col_name_;
+        col.cs_type_ = CS_TYPE_UTF8MB4_BIN;
+        col.precision_ = -1;
+        col.scale_ = -1;
+        if (1 == pq_info.physical_type_ || 2 == pq_info.physical_type_) { // INT32/INT64
+          col.type_ = ObIntType;
+          col.length_ = 20;
+        } else if (5 == pq_info.physical_type_) { // DOUBLE
+          col.type_ = ObDoubleType;
+          col.length_ = 22;
+        } else {
+          col.type_ = ObVarcharType;
+          col.length_ = 1024;
+        }
+        if (OB_FAIL(def.columns_.push_back(col))) {
+          LOG_WARN("fail to push parquet column", K(ret));
+        }
+      }
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("file sql format is not supported for schema inference", K(ret), K(def.format_));

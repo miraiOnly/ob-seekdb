@@ -77,6 +77,10 @@ private:
   glob_t glob_buf_;
   int64_t glob_idx_;
   bool glob_inited_;
+  int64_t pq_value_offset_;
+  int64_t pq_value_bytes_;
+  int64_t pq_idx_;
+  int64_t pq_value_width_;
   char *buf_;
   int64_t buf_len_;
   int64_t buf_pos_;

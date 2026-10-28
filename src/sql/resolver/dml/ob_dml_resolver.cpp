@@ -3099,7 +3099,6 @@ int ObDMLResolver::resolve_single_table_column_item(const TableItem &table_item,
     if (OB_FAIL(resolve_json_table_column_item(table_item, column_name, col_item))) {
     }
   } else if (table_item.is_file_sql()) {
-    LOG_ERROR("FS_COLDBG single column branch");
     if (OB_FAIL(resolve_file_sql_column_item(table_item, column_name, col_item))) {
     }
   } else if (table_item.is_values_table()) {
@@ -4040,7 +4039,6 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
       if (OB_FAIL(ob_write_string(*allocator_, path_obj.get_string(), file_def->path_))) {
       } else if (OB_FAIL(ob_write_string(*allocator_, null_str, file_def->null_str_))) {
       }
-      LOG_ERROR("FS_PATHDGB def built", K(file_def->path_), K(static_cast<int8_t>(format)));
     }
 
     // secure_file_priv check against the resolved absolute path.
@@ -4054,7 +4052,6 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
       } else if (ObFileSqlFormat::GLOB == format) {
         // a glob pattern is not a real file, so there is nothing to
         // realpath(); check the literal pattern against secure_file_priv
-        LOG_ERROR("FS_GLOBDBG before check", K(file_def->path_), K(secure_file_priv));
         ObString glob_path_for_check = file_def->path_;
         if (!session_info_->is_inner()
             && OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, glob_path_for_check))) {
@@ -4086,11 +4083,8 @@ int ObDMLResolver::resolve_file_sql_item(const ParseNode &node, TableItem *&tabl
 
     // Infer the output schema from the whole file content (sample_size == -1).
     if (OB_FAIL(ret)) {
-    } else if (ObFileSqlFormat::PARQUET == format) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("read_parquet is not supported yet");
     } else if (OB_FAIL(ObFileSqlInferUtils::infer_schema(*file_def))) {
-      LOG_WARN("fail to infer file sql schema", K(ret), K(*file_def));
+    } else {
     }
 
     // Create the table item and register output column items.
@@ -7884,7 +7878,6 @@ int ObDMLResolver::resolve_file_sql_column_all_items(const TableItem &table_item
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
-  LOG_ERROR("FS_STARDBG all_items entry", K(table_item.table_id_));
   CK (OB_NOT_NULL(stmt));
   CK (OB_LIKELY(table_item.is_file_sql()));
   if (OB_SUCC(ret)) {

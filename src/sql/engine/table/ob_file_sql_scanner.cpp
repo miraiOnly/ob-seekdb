@@ -2,6 +2,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/table/ob_file_sql_scanner.h"
+#include "sql/engine/table/ob_parquet_reader.h"
 #include "lib/charset/ob_charset.h"
 #include "common/timezone/ob_time_convert.h"
 #include "lib/allocator/ob_malloc.h"
@@ -41,6 +42,10 @@ ObFileSqlScanner::ObFileSqlScanner(const ObFileSqlDef &def)
       fp_(NULL),
       glob_idx_(0),
       glob_inited_(false),
+      pq_value_offset_(0),
+      pq_value_bytes_(0),
+      pq_idx_(0),
+      pq_value_width_(8),
       buf_(NULL),
       buf_len_(0),
       buf_pos_(0),
@@ -65,11 +70,37 @@ int ObFileSqlScanner::open()
   int ret = OB_SUCCESS;
   close();
   if (ObFileSqlFormat::CSV != def_.format_ && ObFileSqlFormat::JSON != def_.format_
-      && ObFileSqlFormat::GLOB != def_.format_) {
-    // PARQUET scanner is not implemented yet.
+      && ObFileSqlFormat::GLOB != def_.format_ && ObFileSqlFormat::PARQUET != def_.format_) {
     ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("file sql scanner only supports csv, jsonl and glob files", K(ret),
+    LOG_ERROR("file sql scanner does not support the requested format", K(ret),
              K(static_cast<int8_t>(def_.format_)));
+  } else if (ObFileSqlFormat::PARQUET == def_.format_) {
+    if (def_.path_.empty() || def_.path_.length() + 1 > MAX_FILE_PATH_LEN) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      MEMCPY(file_path_, def_.path_.ptr(), def_.path_.length());
+      file_path_[def_.path_.length()] = '\0';
+      FILE *f = ::fopen(file_path_, "rb");
+      if (OB_ISNULL(f)) {
+        ret = OB_FILE_NOT_EXIST;
+      } else {
+        char small_buf[1 << 16];
+        size_t got = ::fread(small_buf, 1, sizeof(small_buf), f);
+        ::fclose(f);
+        ObParquetFileInfo pq_info;
+        if (OB_FAIL(ob_parse_parquet_footer(small_buf, static_cast<int64_t>(got), pq_info))) {
+          LOG_ERROR("parquet footer parse failed", K(ret));
+        } else if (pq_info.value_data_offset_ + pq_info.num_values_ * 8 > static_cast<int64_t>(got)) {
+          ret = OB_FILE_NOT_EXIST;
+          LOG_ERROR("parquet values exceed file", K(ret), K(pq_info.value_data_offset_), K(pq_info.num_values_));
+        } else {
+          pq_value_offset_ = pq_info.value_data_offset_;
+          pq_value_width_ = (1 == pq_info.physical_type_) ? 4 : 8; // INT32 vs INT64/DOUBLE
+          pq_value_bytes_ = pq_info.num_values_ * pq_value_width_;
+          pq_idx_ = 0;
+        }
+      }
+    }
   } else if (ObFileSqlFormat::GLOB == def_.format_) {
     if (def_.path_.empty()) {
       ret = OB_INVALID_ARGUMENT;
@@ -148,6 +179,8 @@ int ObFileSqlScanner::rewind()
   int ret = OB_SUCCESS;
   if (ObFileSqlFormat::GLOB == def_.format_) {
     glob_idx_ = 0;
+  } else if (ObFileSqlFormat::PARQUET == def_.format_) {
+    pq_idx_ = 0;
   } else if (OB_ISNULL(fp_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("file sql scanner is not opened", K(ret));
@@ -649,6 +682,41 @@ int ObFileSqlScanner::get_next_batch(common::ObIAllocator &allocator, int64_t ca
   if (OB_UNLIKELY(capacity <= 0) || OB_UNLIKELY(col_cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid file sql batch params", K(ret), K(capacity), K(col_cnt));
+  } else if (ObFileSqlFormat::PARQUET == def_.format_) {
+    // PQ_PARQUET_BATCH_MARKER
+    ObNewRow *row_arr = static_cast<ObNewRow*>(allocator.alloc(sizeof(ObNewRow) * capacity));
+    ObObj *cells = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * capacity * col_cnt));
+    if (OB_ISNULL(row_arr) || OB_ISNULL(cells)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      FILE *f = ::fopen(file_path_, "rb");
+      if (OB_ISNULL(f)) {
+        ret = OB_FILE_NOT_EXIST;
+      } else {
+        while (OB_SUCC(ret) && count < capacity && pq_idx_ * pq_value_width_ < pq_value_bytes_) {
+          uint64_t raw = 0;
+          if (0 != ::fseek(f, static_cast<long>(pq_value_offset_ + pq_idx_ * pq_value_width_), SEEK_SET)) {
+            ret = OB_IO_ERROR;
+          } else if (pq_value_width_ != ::fread(&raw, 1, static_cast<size_t>(pq_value_width_), f)) {
+            ret = OB_IO_ERROR;
+          } else {
+            ObObj &cell = cells[count * col_cnt];
+            if (4 == pq_value_width_) {
+              cell.set_int(static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(raw))));
+            } else {
+              cell.set_int(static_cast<int64_t>(raw));
+            }
+            new (row_arr + count) ObNewRow(cells + count * col_cnt, col_cnt);
+            ++count;
+            ++pq_idx_;
+          }
+        }
+        ::fclose(f);
+      }
+      if (OB_SUCC(ret) && count > 0) {
+        rows = row_arr;
+      }
+    }
   } else if (ObFileSqlFormat::GLOB == def_.format_) {
     ObNewRow *row_arr = static_cast<ObNewRow*>(allocator.alloc(sizeof(ObNewRow) * capacity));
     ObObj *cells = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * capacity * col_cnt));

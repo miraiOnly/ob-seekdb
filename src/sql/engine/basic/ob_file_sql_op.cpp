@@ -216,7 +216,6 @@ int ObFileSqlOp::inner_open()
   int ret = OB_SUCCESS;
   ObFileSqlScanner *scanner = NULL;
   void *buf = NULL;
-  LOG_ERROR("FS_OPDBG inner_open", K(ret));
   if (OB_ISNULL(MY_SPEC.file_sql_def_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("file sql def is null", K(ret));
@@ -225,10 +224,8 @@ int ObFileSqlOp::inner_open()
   } else if (OB_ISNULL(scanner = new (buf) ObFileSqlScanner(*MY_SPEC.file_sql_def_))) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(scanner->open())) {
-    LOG_ERROR("FS_OPDBG scanner open failed", K(ret));
   } else {
     scanner_ = scanner;
-    LOG_ERROR("FS_OPDBG scanner open ok", K(MY_SPEC.column_exprs_.count()), K(MY_SPEC.file_sql_def_->columns_.count()));
     col_count_ = MY_SPEC.column_exprs_.count();
     cur_rows_ = NULL;
     cur_row_count_ = 0;

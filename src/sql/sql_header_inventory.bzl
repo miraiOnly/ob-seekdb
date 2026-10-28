@@ -1017,6 +1017,7 @@ SQL_PRIVATE_HEADERS = [
     "engine/subquery/ob_subplan_scan_op.h",
     "engine/table/ob_file_sql_def.h",
     "engine/table/ob_file_sql_scanner.h",
+    "engine/table/ob_parquet_reader.h",
     "engine/table/ob_block_sample_scan_op.h",
     "engine/table/ob_ddl_block_sample_scan_op.h",
     "engine/table/ob_row_sample_scan_op.h",

@@ -1024,7 +1024,8 @@ SQL_UNITY_GROUPS = [
         srcs = [
             "src/sql/engine/table/ob_file_sql_def.cpp",
             "src/sql/engine/table/ob_file_sql_scanner.cpp",
-            "src/sql/engine/table/ob_block_sample_scan_op.cpp",
+        "src/sql/engine/table/ob_parquet_reader.cpp",
+                            "src/sql/engine/table/ob_block_sample_scan_op.cpp",
             "src/sql/engine/table/ob_row_sample_scan_op.cpp",
             "src/sql/engine/table/ob_table_partition_ranges.cpp",
             "src/sql/engine/table/ob_table_row_store_op.cpp",
